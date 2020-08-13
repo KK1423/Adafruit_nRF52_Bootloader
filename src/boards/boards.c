@@ -40,6 +40,7 @@
 #endif
 
 //------------- IMPLEMENTATION -------------//
+#if BUTTONS_NUMBER > 0
 void button_init(uint32_t pin)
 {
   if ( BUTTON_PULL == NRF_GPIO_PIN_PULLDOWN )
@@ -57,6 +58,7 @@ bool button_pressed(uint32_t pin)
   uint32_t const active_state = (BUTTON_PULL == NRF_GPIO_PIN_PULLDOWN ? 1 : 0);
   return nrf_gpio_pin_read(pin) == active_state;
 }
+#endif
 
 void board_init(void)
 {
@@ -72,10 +74,12 @@ void board_init(void)
   NRFX_DELAY_US(100); // wait for the pin state is stable
 
   // use PMW0 for LED RED
+#ifdef LED_PRIMARY_PIN
   led_pwm_init(LED_PRIMARY, LED_PRIMARY_PIN);
-  #if LEDS_NUMBER > 1
+#endif
+#ifdef LED_SECONDARY_PIN
   led_pwm_init(LED_SECONDARY, LED_SECONDARY_PIN);
-  #endif
+#endif
 
   // use neopixel for use enumeration
 #if defined(LED_NEOPIXEL) || defined(LED_RGB_RED_PIN)
@@ -202,6 +206,7 @@ static uint32_t primary_cycle_length;
 static uint32_t secondary_cycle_length;
 #endif
 void led_tick() {
+    #ifdef LED_PRIMARY_PIN
     uint32_t millis = _systick_count;
 
     uint32_t cycle = millis % primary_cycle_length;
@@ -214,6 +219,7 @@ void led_tick() {
     duty_cycle = 0xff - duty_cycle;
     #endif
     led_pwm_duty_cycle(LED_PRIMARY, duty_cycle);
+    #endif
 
     #ifdef LED_SECONDARY_PIN
     cycle = millis % secondary_cycle_length;

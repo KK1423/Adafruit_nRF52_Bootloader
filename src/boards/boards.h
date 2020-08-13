@@ -37,6 +37,11 @@
 #define UF2_VOLUME_LABEL   "NRF52BOOT  "
 #endif
 
+#if BUTTONS_NUMBER == 0
+#define BUTTON_1 0
+#define BUTTON_2 0
+#endif
+
 #ifndef BUTTON_DFU
 #define BUTTON_DFU      BUTTON_1
 #endif
@@ -54,6 +59,17 @@
 // RGB LEDs.
 #ifndef LED_STATE_ON
 #define LED_STATE_ON   0
+#endif
+
+#if BUTTONS_NUMBER < 2
+  #ifdef LED_SECONDARY_PIN
+    #undef LED_SECONDARY_PIN
+  #endif
+  #if BUTTONS_NUMBER < 1
+    #ifdef LED_PRIMARY_PIN
+      #undef LED_PRIMARY_PIN
+    #endif
+  #endif
 #endif
 
 // Internal status colors are masked by this brightness setting.
@@ -97,12 +113,18 @@ void led_tick(void);
 // BUTTONS
 //--------------------------------------------------------------------+
 // Make sure we have at least two buttons (DFU + FRESET since DFU+FRST=OTA)
-#if BUTTONS_NUMBER < 2
-#error "At least two buttons required in the BSP (see 'BUTTONS_NUMBER')"
+#if BUTTONS_NUMBER == 1
+#error "Need either zero or at least two buttons in buttons"
 #endif
 
+#if BUTTONS_NUMBER > 0
 void button_init(uint32_t pin);
 bool button_pressed(uint32_t pin);
+#else
+#define button_init(pin)
+#define button_pressed(pin) false
+#endif
+
 
 bool is_ota(void);
 
