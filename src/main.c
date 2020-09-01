@@ -68,7 +68,6 @@
 #include "pstorage.h"
 #include "nrfx_nvmc.h"
 
-
 #ifdef NRF_USBD
 #include "nrf_usbd.h"
 #include "tusb.h"
@@ -78,7 +77,7 @@ void usb_teardown(void);
 
 #else
 
-#define usb_init(x)       led_state(STATE_USB_MOUNTED) // mark nrf52832 as mounted
+#define usb_init(x) led_state(STATE_USB_MOUNTED) // mark nrf52832 as mounted
 #define usb_teardown()
 
 #endif
@@ -105,34 +104,37 @@ void usb_teardown(void);
  * Note: for DFU_MAGIC_OTA_APPJUM Softdevice must not initialized.
  * since it is already in application. In all other case of OTA SD must be initialized
  */
-#define DFU_MAGIC_OTA_APPJUM            BOOTLOADER_DFU_START             // 0xB1
-#define DFU_MAGIC_OTA_RESET             0xA8
-#define DFU_MAGIC_SERIAL_ONLY_RESET     0x4e
-#define DFU_MAGIC_UF2_RESET             0x57
+#define DFU_MAGIC_OTA_APPJUM BOOTLOADER_DFU_START // 0xB1
+#define DFU_MAGIC_OTA_RESET 0xA8
+#define DFU_MAGIC_SERIAL_ONLY_RESET 0x4e
+#define DFU_MAGIC_UF2_RESET 0x57
 
-#define DFU_DBL_RESET_MAGIC             0x5A1AD5      // SALADS
-#define DFU_DBL_RESET_APP               0x4ee5677e
-#define DFU_DBL_RESET_DELAY             500
-#define DFU_DBL_RESET_MEM               0x20007F7C
+#define DFU_DBL_RESET_MAGIC 0x5A1AD5 // SALADS
+#define DFU_DBL_RESET_APP 0x4ee5677e
+#define DFU_DBL_RESET_DELAY 500
+#define DFU_DBL_RESET_MEM 0x20007F7C
 
-#define BOOTLOADER_VERSION_REGISTER     NRF_TIMER2->CC[0]
-#define DFU_SERIAL_STARTUP_INTERVAL     1000
+#define BOOTLOADER_VERSION_REGISTER NRF_TIMER2->CC[0]
+#define DFU_SERIAL_STARTUP_INTERVAL 1000
 
 // Allow for using reset button essentially to swap between application and bootloader.
 // This is controlled by a flag in the app and is the behavior of CPX and all Arcade boards when using MakeCode.
-#define APP_ASKS_FOR_SINGLE_TAP_RESET() (*((uint32_t*)(DFU_BANK_0_REGION_START + 0x200)) == 0x87eeb07c)
+#define APP_ASKS_FOR_SINGLE_TAP_RESET() (*((uint32_t *)(DFU_BANK_0_REGION_START + 0x200)) == 0x87eeb07c)
 
 // These value must be the same with one in dfu_transport_ble.c
-#define BLEGAP_EVENT_LENGTH             6
-#define BLEGATT_ATT_MTU_MAX             247
-enum { BLE_CONN_CFG_HIGH_BANDWIDTH = 1 };
+#define BLEGAP_EVENT_LENGTH 6
+#define BLEGATT_ATT_MTU_MAX 247
+enum
+{
+  BLE_CONN_CFG_HIGH_BANDWIDTH = 1
+};
 
 //--------------------------------------------------------------------+
 //
 //--------------------------------------------------------------------+
 static uint32_t softdev_init(bool init_softdevice);
 
-uint32_t* dbl_reset_mem = ((uint32_t*)  DFU_DBL_RESET_MEM );
+uint32_t *dbl_reset_mem = ((uint32_t *)DFU_DBL_RESET_MEM);
 
 // true if ble, false if serial
 bool _ota_dfu = false;
@@ -146,8 +148,9 @@ bool is_ota(void)
 void softdev_mbr_init(void)
 {
   PRINTF("SD_MBR_COMMAND_INIT_SD\r\n");
-  sd_mbr_command_t com = { .command = SD_MBR_COMMAND_INIT_SD };
+  sd_mbr_command_t com = {.command = SD_MBR_COMMAND_INIT_SD};
   sd_mbr_command(&com);
+  PRINTF("SD_MBR_COMMAND_INIT_SD\r\n");
 }
 
 //--------------------------------------------------------------------+
@@ -172,11 +175,11 @@ int main(void)
   bool serial_only_dfu = (NRF_POWER->GPREGRET == DFU_MAGIC_SERIAL_ONLY_RESET);
 
   // start either serial, uf2 or ble
-  bool dfu_start = _ota_dfu || serial_only_dfu || (NRF_POWER->GPREGRET == DFU_MAGIC_UF2_RESET) ||
-                    (((*dbl_reset_mem) == DFU_DBL_RESET_MAGIC) && (NRF_POWER->RESETREAS & POWER_RESETREAS_RESETPIN_Msk));
+  bool dfu_start = _ota_dfu || serial_only_dfu || (NRF_POWER->GPREGRET == DFU_MAGIC_UF2_RESET);
 
   // Clear GPREGRET if it is our values
-  if (dfu_start) NRF_POWER->GPREGRET = 0;
+  if (dfu_start)
+    NRF_POWER->GPREGRET = 0;
 
   // Save bootloader version to pre-defined register, retrieved by application
   // TODO move to CF2
@@ -192,83 +195,36 @@ int main(void)
   {
     led_state(STATE_WRITING_STARTED);
 
-    APP_ERROR_CHECK( bootloader_dfu_sd_update_continue() );
-    APP_ERROR_CHECK( bootloader_dfu_sd_update_finalize() );
+    APP_ERROR_CHECK(bootloader_dfu_sd_update_continue());
+    APP_ERROR_CHECK(bootloader_dfu_sd_update_finalize());
 
     led_state(STATE_WRITING_FINISHED);
   }
 
   /*------------- Determine DFU mode (Serial, OTA, FRESET or normal) -------------*/
-  // DFU button pressed
-  dfu_start  = dfu_start || button_pressed(BUTTON_DFU);
 
-  // DFU + FRESET are pressed --> OTA
-  _ota_dfu = _ota_dfu  || ( button_pressed(BUTTON_DFU) && button_pressed(BUTTON_FRESET) ) ;
+  // all dfu is ota
+  _ota_dfu = true;
 
   bool const valid_app = bootloader_app_is_valid();
-  bool const just_start_app = valid_app && !dfu_start && (*dbl_reset_mem) == DFU_DBL_RESET_APP;
 
-  if (!just_start_app && APP_ASKS_FOR_SINGLE_TAP_RESET())
-    dfu_start = 1;
-
-  // App mode: register 1st reset and DFU startup (nrf52832)
-  if ( ! (just_start_app || dfu_start || !valid_app) )
+  if (valid_app)
+    PRINTF("valid app \n");
+  else
   {
-    // Register our first reset for double reset detection
-    (*dbl_reset_mem) = DFU_DBL_RESET_MAGIC;
-
-#ifdef NRF52832_XXAA
-    /* Even DFU is not active, we still force an 1000 ms dfu serial mode when startup
-     * to support auto programming from Arduino IDE
-     *
-     * Note: Supposedly during this time if RST is press, it will count as double reset.
-     * However Double Reset WONT work with nrf52832 since its SRAM got cleared anyway.
-     */
-    bootloader_dfu_start(false, DFU_SERIAL_STARTUP_INTERVAL, false);
-#else
-    // if RST is pressed during this delay --> if will enter dfu
-    NRFX_DELAY_MS(DFU_DBL_RESET_DELAY);
-#endif
+    PRINTF("invalid app \n");
   }
 
-  if (APP_ASKS_FOR_SINGLE_TAP_RESET())
-    (*dbl_reset_mem) = DFU_DBL_RESET_APP;
-  else
-    (*dbl_reset_mem) = 0;
-
-  if ( dfu_start || !valid_app )
+  if (dfu_start || !valid_app)
   {
-    if ( _ota_dfu )
-    {
-      led_state(STATE_BLE_DISCONNECTED);
-      softdev_init(!sd_inited);
-      sd_inited = true;
-    }
-    else
-    {
-      led_state(STATE_USB_UNMOUNTED);
-      usb_init(serial_only_dfu);
-    }
+    led_state(STATE_BLE_DISCONNECTED);
+    softdev_init(!sd_inited);
+    sd_inited = true;
 
-    // Initiate an update of the firmware.
-    if (APP_ASKS_FOR_SINGLE_TAP_RESET())
-    {
-      // If USB is not enumerated in 3s (eg. because we're running on battery), we restart into app.
-      APP_ERROR_CHECK( bootloader_dfu_start(_ota_dfu, 3000, true) );
-    }
-    else
-    {
-      // No timeout if bootloader requires user action (double-reset).
-      APP_ERROR_CHECK( bootloader_dfu_start(_ota_dfu, 0, false) );
-    }
+    PRINTF("starting ota \n");
+    APP_ERROR_CHECK(bootloader_dfu_start(true, 0, false));
 
-    if ( _ota_dfu )
-    {
-      sd_softdevice_disable();
-    }else
-    {
-      usb_teardown();
-    }
+    sd_softdevice_disable();
   }
 
   // Reset Board
@@ -285,17 +241,15 @@ int main(void)
   if (bootloader_app_is_valid() && !bootloader_dfu_sd_in_progress())
   {
     PRINTF("App is valid\r\n");
-    if ( is_sd_existed() )
+    if (is_sd_existed())
     {
       // MBR forward IRQ to SD (if not already)
-      if ( !sd_inited ) softdev_mbr_init();
+      if (!sd_inited)
+        softdev_mbr_init();
 
       // Make sure SD is disabled
       sd_softdevice_disable();
     }
-
-    // clear in case we kept DFU_DBL_RESET_APP there
-    (*dbl_reset_mem) = 0;
 
     // start application
     bootloader_app_start();
@@ -314,58 +268,65 @@ int main(void)
  */
 static uint32_t softdev_init(bool init_softdevice)
 {
-  if (init_softdevice) softdev_mbr_init();
+  if (init_softdevice)
+    softdev_mbr_init();
 
   // Forward vector table to bootloader address so that we can handle BLE events
-  APP_ERROR_CHECK( sd_softdevice_vector_table_base_set(BOOTLOADER_REGION_START) );
+  
+  APP_ERROR_CHECK(sd_softdevice_vector_table_base_set(BOOTLOADER_REGION_START));
 
+  
   // Enable Softdevice, Use Internal OSC to compatible with all boards
   nrf_clock_lf_cfg_t clock_cfg =
-  {
-      .source       = NRF_CLOCK_LF_SRC_RC,
-      .rc_ctiv      = 16,
-      .rc_temp_ctiv = 2,
-      .accuracy     = NRF_CLOCK_LF_ACCURACY_250_PPM
-  };
+      {
+          .source = NRF_CLOCK_LF_SRC_RC,
+          .rc_ctiv = 16,
+          .rc_temp_ctiv = 2,
+          .accuracy = NRF_CLOCK_LF_ACCURACY_250_PPM};
 
-  APP_ERROR_CHECK( sd_softdevice_enable(&clock_cfg, app_error_fault_handler) );
+  APP_ERROR_CHECK(sd_softdevice_enable(&clock_cfg, app_error_fault_handler));
   sd_nvic_EnableIRQ(SD_EVT_IRQn);
 
   /*------------- Configure BLE params  -------------*/
-  extern uint32_t  __data_start__[]; // defined in linker
-  uint32_t ram_start = (uint32_t) __data_start__;
+  extern uint32_t __data_start__[]; // defined in linker
+  uint32_t ram_start = (uint32_t)__data_start__;
 
   ble_cfg_t blecfg;
 
   // Configure the maximum number of connections.
   varclr(&blecfg);
   blecfg.gap_cfg.role_count_cfg.adv_set_count = 1;
-  blecfg.gap_cfg.role_count_cfg.periph_role_count  = 1;
+  blecfg.gap_cfg.role_count_cfg.periph_role_count = 1;
   blecfg.gap_cfg.role_count_cfg.central_role_count = 0;
-  blecfg.gap_cfg.role_count_cfg.central_sec_count  = 0;
-  APP_ERROR_CHECK( sd_ble_cfg_set(BLE_GAP_CFG_ROLE_COUNT, &blecfg, ram_start) );
+  blecfg.gap_cfg.role_count_cfg.central_sec_count = 0;
+  
+  APP_ERROR_CHECK(sd_ble_cfg_set(BLE_GAP_CFG_ROLE_COUNT, &blecfg, ram_start));
 
   // NRF_DFU_BLE_REQUIRES_BONDS
   varclr(&blecfg);
   blecfg.gatts_cfg.service_changed.service_changed = 1;
-  APP_ERROR_CHECK( sd_ble_cfg_set(BLE_GATTS_CFG_SERVICE_CHANGED, &blecfg, ram_start) );
+  
+  APP_ERROR_CHECK(sd_ble_cfg_set(BLE_GATTS_CFG_SERVICE_CHANGED, &blecfg, ram_start));
 
   // ATT MTU
   varclr(&blecfg);
   blecfg.conn_cfg.conn_cfg_tag = BLE_CONN_CFG_HIGH_BANDWIDTH;
   blecfg.conn_cfg.params.gatt_conn_cfg.att_mtu = BLEGATT_ATT_MTU_MAX;
-  APP_ERROR_CHECK( sd_ble_cfg_set(BLE_CONN_CFG_GATT, &blecfg, ram_start) );
+  
+  APP_ERROR_CHECK(sd_ble_cfg_set(BLE_CONN_CFG_GATT, &blecfg, ram_start));
 
   // Event Length + HVN queue + WRITE CMD queue setting affecting bandwidth
   varclr(&blecfg);
   blecfg.conn_cfg.conn_cfg_tag = BLE_CONN_CFG_HIGH_BANDWIDTH;
-  blecfg.conn_cfg.params.gap_conn_cfg.conn_count   = 1;
+  blecfg.conn_cfg.params.gap_conn_cfg.conn_count = 1;
   blecfg.conn_cfg.params.gap_conn_cfg.event_length = BLEGAP_EVENT_LENGTH;
-  APP_ERROR_CHECK( sd_ble_cfg_set(BLE_CONN_CFG_GAP, &blecfg, ram_start) );
+  
+  APP_ERROR_CHECK(sd_ble_cfg_set(BLE_CONN_CFG_GAP, &blecfg, ram_start));
 
   // Enable BLE stack.
   // Note: Interrupt state (enabled, forwarding) is not work properly if not enable ble
-  APP_ERROR_CHECK( sd_ble_enable(&ram_start) );
+  
+  APP_ERROR_CHECK(sd_ble_enable(&ram_start));
 
 #if 0
   ble_opt_t  opt;
@@ -377,18 +338,19 @@ static uint32_t softdev_init(bool init_softdevice)
   return NRF_SUCCESS;
 }
 
-
 //--------------------------------------------------------------------+
 // Error Handler
 //--------------------------------------------------------------------+
 void app_error_fault_handler(uint32_t id, uint32_t pc, uint32_t info)
 {
-  volatile uint32_t* ARM_CM_DHCSR =  ((volatile uint32_t*) 0xE000EDF0UL); /* Cortex M CoreDebug->DHCSR */
-  if ( (*ARM_CM_DHCSR) & 1UL ) __asm("BKPT #0\n"); /* Only halt mcu if debugger is attached */
+  PRINTF("APP_ERROR\n");
+  volatile uint32_t *ARM_CM_DHCSR = ((volatile uint32_t *)0xE000EDF0UL); /* Cortex M CoreDebug->DHCSR */
+  if ((*ARM_CM_DHCSR) & 1UL)
+    __asm("BKPT #0\n"); /* Only halt mcu if debugger is attached */
   NVIC_SystemReset();
 }
 
-void assert_nrf_callback (uint16_t line_num, uint8_t const * p_file_name)
+void assert_nrf_callback(uint16_t line_num, uint8_t const *p_file_name)
 {
   app_error_fault_handler(0xDEADBEEF, 0, 0);
 }
@@ -400,30 +362,32 @@ void assert_nrf_callback (uint16_t line_num, uint8_t const * p_file_name)
 // Process BLE event from SD
 uint32_t proc_ble(void)
 {
-  __ALIGN(4) uint8_t ev_buf[ BLE_EVT_LEN_MAX(BLEGATT_ATT_MTU_MAX) ];
+  __ALIGN(4)
+  uint8_t ev_buf[BLE_EVT_LEN_MAX(BLEGATT_ATT_MTU_MAX)];
   uint16_t ev_len = BLE_EVT_LEN_MAX(BLEGATT_ATT_MTU_MAX);
 
   // Get BLE Event
   uint32_t err = sd_ble_evt_get(ev_buf, &ev_len);
 
   // Handle valid event, ignore error
-  if( NRF_SUCCESS == err)
+  if (NRF_SUCCESS == err)
   {
-    ble_evt_t* evt = (ble_evt_t*) ev_buf;
+    ble_evt_t *evt = (ble_evt_t *)ev_buf;
 
     switch (evt->header.evt_id)
     {
-      case BLE_GAP_EVT_CONNECTED:
-        _ota_connected = true;
-        led_state(STATE_BLE_CONNECTED);
+    case BLE_GAP_EVT_CONNECTED:
+      _ota_connected = true;
+      led_state(STATE_BLE_CONNECTED);
       break;
 
-      case BLE_GAP_EVT_DISCONNECTED:
-        _ota_connected = false;
-        led_state(STATE_BLE_DISCONNECTED);
+    case BLE_GAP_EVT_DISCONNECTED:
+      _ota_connected = false;
+      led_state(STATE_BLE_DISCONNECTED);
       break;
 
-      default: break;
+    default:
+      break;
     }
 
     // from dfu_transport_ble
@@ -447,26 +411,24 @@ uint32_t proc_soc(void)
 #ifdef NRF_USBD
     extern void tusb_hal_nrf_power_event(uint32_t event);
     /*------------- usb power event handler -------------*/
-    int32_t usbevt = (soc_evt == NRF_EVT_POWER_USB_DETECTED   ) ? NRFX_POWER_USB_EVT_DETECTED:
-                     (soc_evt == NRF_EVT_POWER_USB_POWER_READY) ? NRFX_POWER_USB_EVT_READY   :
-                     (soc_evt == NRF_EVT_POWER_USB_REMOVED    ) ? NRFX_POWER_USB_EVT_REMOVED : -1;
+    int32_t usbevt = (soc_evt == NRF_EVT_POWER_USB_DETECTED) ? NRFX_POWER_USB_EVT_DETECTED : (soc_evt == NRF_EVT_POWER_USB_POWER_READY) ? NRFX_POWER_USB_EVT_READY : (soc_evt == NRF_EVT_POWER_USB_REMOVED) ? NRFX_POWER_USB_EVT_REMOVED : -1;
 
-    if ( usbevt >= 0) tusb_hal_nrf_power_event(usbevt);
+    if (usbevt >= 0)
+      tusb_hal_nrf_power_event(usbevt);
 #endif
   }
 
   return err;
 }
 
-void ada_sd_task(void* evt_data, uint16_t evt_size)
+void ada_sd_task(void *evt_data, uint16_t evt_size)
 {
-  (void) evt_data;
-  (void) evt_size;
+  (void)evt_data;
+  (void)evt_size;
 
   // process BLE and SOC until there is no more events
-  while( (NRF_ERROR_NOT_FOUND != proc_ble()) || (NRF_ERROR_NOT_FOUND != proc_soc()) )
+  while ((NRF_ERROR_NOT_FOUND != proc_ble()) || (NRF_ERROR_NOT_FOUND != proc_soc()))
   {
-
   }
 }
 
@@ -476,7 +438,6 @@ void SD_EVT_IRQHandler(void)
   app_sched_event_put(NULL, 0, ada_sd_task);
 }
 
-
 //--------------------------------------------------------------------+
 // RTT printf retarget for Debug
 //--------------------------------------------------------------------+
@@ -484,20 +445,17 @@ void SD_EVT_IRQHandler(void)
 
 #include "SEGGER_RTT.h"
 
-__attribute__ ((used))
-int _write (int fhdl, const void *buf, size_t count)
+__attribute__((used)) int _write(int fhdl, const void *buf, size_t count)
 {
-  (void) fhdl;
-  SEGGER_RTT_Write(0, (char*) buf, (int) count);
+  (void)fhdl;
+  SEGGER_RTT_Write(0, (char *)buf, (int)count);
   return count;
 }
 
-__attribute__ ((used))
-int _read (int fhdl, char *buf, size_t count)
+__attribute__((used)) int _read(int fhdl, char *buf, size_t count)
 {
-  (void) fhdl;
+  (void)fhdl;
   return SEGGER_RTT_Read(0, buf, count);
 }
-
 
 #endif
